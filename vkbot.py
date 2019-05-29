@@ -3,6 +3,9 @@ import bs4
 from vk_api.longpoll import VkLongPoll, VkEventType
 import re
 import requests
+import datetime
+import matplotlib
+import matplotlib.pyplot as plt
 
 token = "ad717cbc60d260bf17875fa8b7e1c0656dbb34dac2bb5007c8367297a2e470010e8d26a01adf2f99e38a3"
 
@@ -66,24 +69,58 @@ class VkBot:
 
             myMessage = self.getWeather(usersCity[user_id])
 
-        elif (re.match('погода ', message) and not re.match('погода за месяц', message) and len(message) > 8):
+        elif (re.match('погода ', message) and not re.match('погода на неделю', message) and len(message) > 8):
 
             myMessage = self.getWeather(message[7].upper() + message[8:])
 
-        elif (message == 'погода за месяц'):
+        elif (message == 'погода на неделю'):
 
-            myMessage = usersCity[user_id][0].upper() + usersCity[user_id][1:] + ' за месяц'
+            forecast = self.getForecast(usersCity[user_id])
 
-        elif (re.match('погода за месяц ', message) and len(message) > 17):
+            for date in forecast:
 
-            myMessage = message[16].upper() + message[17:] + ' за месяц'
+                myMessage += date
+                myMessage += ': '
+
+                if (forecast[date] > 0):
+                    myMessage += '+'
+
+                elif (forecast[date] < 0):
+                    myMessage += '-'
+
+                myMessage += str(forecast[date])
+                myMessage += '°\n'
+
+        elif (re.match('погода на неделю ', message) and len(message) > 18):
+
+            forecast = self.getForecast(message[16:])
+
+            if (isinstance(forecast, dict)):
+
+                for date in forecast:
+
+                    myMessage += date
+                    myMessage += ': '
+
+                    if (forecast[date] > 0):
+                        myMessage += '+'
+
+                    elif (forecast[date] < 0):
+                        myMessage += '-'
+
+                    myMessage += str(forecast[date])
+                    myMessage += '°\n'
+
+            else:
+
+                myMessage = "Не нашел такого города.."
 
         elif (message == 'help'):
 
             myMessage = "'Погода' - узнать погоду в твоем городе\n \
                         'Погода название_города' - погода в этом городе\n \
-                        'Погода за месяц' - график температуры за последние 30 дней\n \
-                        'Погода за месяц название_города' - график температуры за последние 30 дней в этом городе"
+                        'Погода на неделю - прогноз погоды на неделю\n \
+                        'Погода на неделю название_города' - пргоноз погоды на неделю в этом городе"
         else:
 
             myMessage = "Не понял тебя.."
@@ -94,7 +131,7 @@ class VkBot:
         """
         Gets the weather
         :param city: city, in which we get the weather
-        :return:
+        :return: weather
         """
         request = requests.get("https://sinoptik.com.ru/погода-" + city)
         b = bs4.BeautifulSoup(request.text, "html.parser")
@@ -124,3 +161,50 @@ class VkBot:
         except:
             
             return "Не нашел такого города.."
+
+    def getForecast(self, city = 'Москва'):
+        """
+        Gets the forecast on week
+        :param city: city, in which we get the forecast
+        :return: forecast
+        """
+
+        try:
+
+            result = {}
+            currentDate = datetime.datetime.today().date()
+
+            for i in range(7):
+
+                request = requests.get("https://sinoptik.com.ru/погода-" + city + '#' + str(currentDate + datetime.timedelta(days=i)))
+                b = bs4.BeautifulSoup(request.text, "html.parser")
+
+                p5 = b.select('.temperature .p5')
+                weather = p5[0].getText()
+                weather = weather[:(len(weather) - 1)]
+
+                result[str(currentDate + datetime.timedelta(days=i))] = int(weather)
+
+                print(int(weather))
+
+            return result
+
+        except:
+
+            return "Не нашел такого города.."
+
+    def drawForecast(self, forecast):
+
+        fig = plt.figure(num=None, figsize=(12, 6), dpi=80, facecolor='w', edgecolor='k')
+        ax = fig.add_axes([0, 0, 1, 1])
+        plt.grid(True)
+        plt.xlabel('Date')
+        plt.ylabel('Temperature')
+        x = forecast.keys()
+        y = forecast.values()
+        plt.plot(x, y, label='1', color='red', linewidth=2)
+        #ax.legend()
+        plt.interactive(True)
+        plt.show(block=True)
+
+        plt.savefig('myGraf.png')
